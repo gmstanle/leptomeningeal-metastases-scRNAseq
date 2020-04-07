@@ -1,0 +1,9 @@
+*.pdf
+*.png
+*.jpg
+*.csv
+/data/
+/archive/
+*.Rhistory
+*.DS_Store
+

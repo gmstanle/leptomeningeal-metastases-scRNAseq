@@ -1,0 +1,359 @@
+---
+title: "Analysis of C1 scRNAseq data for 'Comprehensive RNA analysis reveals a role for CEACAM6 in lung cancer leptomeningeal metastases'"
+output: html_notebook
+---
+
+
+```{r}
+rm(list=ls())
+require(data.table)
+require(ggplot2)
+require(reshape2)
+require(RColorBrewer)
+require(plyr)
+DATA_DIR = '../data'
+SRC_DIR = '../src'
+REPORT_DIR = '../reports/original_submission'
+source(file.path(SRC_DIR,"../src/rnaseq_funcs_V2.R"))
+load(file.path(DATA_DIR,'lepto_met.data.RData'))
+sessionInfo()
+```
+
+```{r}
+head(data.all)
+```
+
+all r1
+```{r}
+cordir=file.path(REPORT_DIR,'all_r1/')
+
+system(paste0('mkdir ',cordir));system(paste0('mkdir ',cordir,'biplots'));
+data.pca=copy(data.all); setkey(data.pca)
+cell.info=unique(data.pca[,.(cell.name,experiment,experiment_color,num.genes)]); setkey(cell.info)
+
+# rescale log10.cpm values to [0,1]
+data.pca[,num.cells:=sum(log10.cpm>0),by='gene'];data.pca=data.pca[num.cells>1]
+# data.pca[,log10.cpm.orig:=log10.cpm];data.pca[,log10.cpm:=log10.cpm/max(log10.cpm),by='gene']
+
+pca.d1 <- dimplots.pca.lowMem(data.pca,cell.info,cordir,suffix='',max.genes = 30,ncp=10,min.cells.detect=2,cexCol = 1.2,genes.sig = 30,cex.sig = 0.4,plot.gene.cor=F)
+plot.ggpairs.wExptCols(data.pca,dir=cordir,suffix='',num.pcs = 10,height=27,width=27,sigType = 'Sig')
+foreach(i = 1:10) %dopar% {
+  make.facet.biplots(data.pca,c(paste0('PC',i),paste0('PC',i)),cordir,size=2.5,ax.suf = c('.pos','.neg'),height=16,width=20)
+}
+make.facet.biplots(data.pca,c(paste0('PC',1),paste0('PC',10)),cordir,size=2.5)
+make.gene.biplot(data.pca,c('PC2','PC3'),g.plot = 'Fbln5',pc.dir = cordir,size=3)
+
+# isolate CEACAM6 population
+pc.scores=fread(file.path(cordir,'PC_allscores.csv'))
+cast.plot <- dcast.data.table(data.pca,cell.name+experiment+num.genes~gene,value.var='log10.cpm',fill=0);cast.plot <- merge(cast.plot,pc.scores,by='cell.name')
+dark.insilico(cast.plot,'PC1.pos','PC1.neg','CEACAM6','CD74','CEACAM6',fprefix = paste0(cordir,'biplots/'),pch=20,height=4,width=4,cex=1,offset = 0.3)
+abline(b=1,a=0.1,col='white');
+cells.ceacam6 <- pc.scores[PC1.neg < PC1.pos +.1,cell.name]
+save(cells.ceacam6,file=file.path(cordir,'cells_ceacam6.RData'))
+```
+
+
+
+
+```{r}
+# CEACAM6 r1 ----
+cordir=file.path(REPORT_DIR,'ceacam6_r1/')
+system(paste0('mkdir ',cordir));system(paste0('mkdir ',cordir,'biplots'));
+load(file.path(REPORT_DIR,'all_r1/cells_ceacam6.RData'))
+data.lm=data.all[cell.name %in% cells.ceacam6]
+
+pca.d1 <- dimplots.pca.wExptCols(data.lm,cordir,suffix='',max.genes = 30,ncp=10,min.cells.detect=2,cexCol = 1.2,genes.sig = 30,cex.sig = 0.4,plot.gene.cor=F)
+plot.ggpairs.wExptCols(data.lm,dir=cordir,suffix='',num.pcs = 10,height=27,width=27,sigType = 'Sig')
+for(i in 1:10){
+  make.facet.biplots(data.lm,c(paste0('PC',i),paste0('PC',i)),cordir,size=2.5,ax.suf = c('.pos','.neg'),height=16,width=20)
+}
+make.facet.biplots(data.lm,c(paste0('PC',1),paste0('PC',10)),cordir,size=2.5)
+ 
+# isolate TP182 SPRR1B+ population
+# SPRR1B appears to be a known cancer biomarker for squamous cell carcinoma
+# Other pop, all from pt TP228, expresses UCA1, a bladder/colorectal carcinoma marker
+pc.scores=fread(paste0(cordir,'PC_allscores.csv'))
+cast.plot <- dcast.data.table(data.lm,cell.name+experiment+num.genes~gene,value.var='log10.cpm',fill=0);cast.plot <- merge(cast.plot,pc.scores,by='cell.name')
+dark.insilico(cast.plot,'PC1.pos','PC1.neg','SPRR1B','UCA1','SPRR1B',fprefix = paste0(cordir,'biplots/'),pch=20,height=4,width=4,cex=1,offset = 0.3)
+abline(v=.5,col='white');
+cells.sprr1b <- pc.scores[PC1.pos > .5,cell.name]
+save(cells.sprr1b,file=file.path(REPORT_DIR,'ceacam6_r1/cells_SPRR1B.RData'))
+
+```
+
+
+```{r}
+# CEACAM6 r2 ----
+cordir=file.path(REPORT_DIR,'ceacam6_r2/')
+system(paste0('mkdir ',cordir));system(paste0('mkdir ',cordir,'biplots'));
+load(file.path(REPORT_DIR,'all_r1/cells_ceacam6.RData'));load(file.path(REPORT_DIR,'ceacam6_r1/cells_SPRR1B.RData'))
+data.lm=data.all[cell.name %in% cells.ceacam6]
+data.lm=data.lm[!cell.name %in% cells.sprr1b]
+
+pca.d1 <- dimplots.pca.wExptCols(data.lm,cordir,suffix='',max.genes = 30,ncp=10,min.cells.detect=2,cexCol = 1.2,genes.sig = 30,cex.sig = 0.4,plot.gene.cor=F)
+plot.ggpairs.wExptCols(data.lm,dir=cordir,suffix='',num.pcs = 10,height=27,width=27,sigType = 'Sig')
+for(i in 1:10){
+  make.facet.biplots(data.lm,c(paste0('PC',i),paste0('PC',i)),cordir,size=2.5,ax.suf = c('.pos','.neg'),height=16,width=20)
+}
+make.facet.biplots(data.lm,c(paste0('PC',1),paste0('PC',10)),cordir,size=2.5)
+
+pc.scores=fread(file.path(cordir,'PC_allscores.csv'))
+cells.foxn4=pc.scores[PC10.neg>.5,cell.name]
+save(cells.foxn4,file=file.path(REPORT_DIR,'ceacam6_r2/cells_foxn4.RData'))
+
+```
+
+```{r}
+# CEACAM6 r3 ----
+cordir=file.path(REPORT_DIR,'ceacam6_r3/')
+system(paste0('mkdir ',cordir));system(paste0('mkdir ',cordir,'biplots'))
+load(file.path(REPORT_DIR,'all_r1/cells_ceacam6.RData'))
+load(file.path(REPORT_DIR,'ceacam6_r1/cells_SPRR1B.RData'))
+load(file.path(REPORT_DIR,'ceacam6_r2/cells_foxn4.RData'))
+data.lm=data.all[cell.name %in% cells.ceacam6]
+data.lm=data.lm[!cell.name %in% c(cells.sprr1b,cells.foxn4)]
+
+pca.d1 <- dimplots.pca.wExptCols(data.lm,cordir,suffix='',max.genes = 30,ncp=10,min.cells.detect=2,cexCol = 1.2,genes.sig = 30,cex.sig = 0.4,plot.gene.cor=F)
+plot.ggpairs.wExptCols(data.lm,dir=cordir,suffix='',num.pcs = 10,height=27,width=27,sigType = 'Sig')
+for(i in 1:10){
+  make.facet.biplots(data.lm,c(paste0('PC',i),paste0('PC',i)),cordir,size=2.5,ax.suf = c('.pos','.neg'),height=16,width=20)
+}
+make.facet.biplots(data.lm,c(paste0('PC',2),paste0('PC',6)),cordir,size=3.5)
+
+# PC2 contains AXL and PC6 contains MITF - reported as anti-regulated in melanoma in Regev 2016 Science.
+
+# Remove cycling cells using PC1 and PC2
+pc.scores=fread(file.path(cordir,'PC_allscores.csv'))
+cast.plot <- dcast.data.table(data.lm,cell.name+experiment+num.genes~gene,value.var='log10.cpm',fill=0);cast.plot <- merge(cast.plot,pc.scores,by='cell.name')
+dark.insilico(cast.plot,'PC1.score','PC2.score','MKI67','TOP2A','CENPF',fprefix = paste0(cordir,'biplots/'),pch=20,height=4,width=4,cex=1,offset = 0.3)
+abline(a=-.25,b=1,col='white');
+cells.r3.cc <- pc.scores[PC2.score < PC1.score-.25,cell.name]
+save(cells.r3.cc,file=file.path(REPORT_DIR,'ceacam6_r3/cells_cc.RData'))
+
+# use PC2.neg to find CC genes
+pc.loadings=fread(file.path(REPORT_DIR,'ceacam6_r3/PCloadings.csv'))
+ng=100
+genes.cc=unique(pc.loadings[order(PC2),gene][1:ng])
+save(genes.cc,file=file.path(REPORT_DIR,'genes_cc.RData'))
+
+```
+
+```{r}
+# CEACAM6 r4 ----
+# for now only look at TP228 - other cells are just 'outliers' lacking UCA1, MUC16, PROM1
+cordir=file.path(REPORT_DIR,'ceacam6_r4/') 
+system(paste0('mkdir ',cordir));system(paste0('mkdir ',cordir,'biplots'));
+load(file.path(REPORT_DIR,'all_r1/cells_ceacam6.RData'));
+load(file.path(REPORT_DIR,'ceacam6_r1/cells_SPRR1B.RData'))
+load(file.path(REPORT_DIR,'ceacam6_r2/cells_foxn4.RData'))
+load(file.path(REPORT_DIR,'ceacam6_r3/cells_cc.RData'))
+data.lm=data.all[cell.name %in% cells.ceacam6]
+data.lm=data.lm[!cell.name %in% c(cells.sprr1b,cells.foxn4,cells.r3.cc)]
+data.lm=data.lm[experiment=='TP228']
+
+pca.d1 <- dimplots.pca.wExptCols(data.lm,cordir,suffix='',max.genes = 30,ncp=10,min.cells.detect=2,cexCol = 1.2,genes.sig = 30,cex.sig = 0.4,plot.gene.cor=F)
+plot.ggpairs.wExptCols(data.lm,dir=cordir,suffix='',num.pcs = 10,height=27,width=27,sigType = 'Sig')
+for(i in 1:10){
+  make.facet.biplots(data.lm,c(paste0('PC',i),paste0('PC',i)),cordir,size=2.5,ax.suf = c('.pos','.neg'),height=16,width=20)
+}
+make.facet.biplots(data.lm,c(paste0('PC',2),paste0('PC',6)),cordir,size=3.5)
+
+length(unique(data.lm[,cell.name]))
+```
+
+```{r}
+# CEACAM6 r3 no cc----
+cordir='ceacam6_r3_noCC/'; 
+system(paste0('mkdir ',cordir));system(paste0('mkdir ',cordir,'biplots'));
+load(file.path(REPORT_DIR,'all_r1/cells_ceacam6.RData'));
+load(file.path(REPORT_DIR,'ceacam6_r1/cells_SPRR1B.RData'));
+load(file.path(REPORT_DIR,'ceacam6_r2/cells_foxn4.RData'))
+load(file.path(REPORT_DIR,'genes_cc.RData'))
+data.lm=data.all[cell.name %in% cells.ceacam6]
+data.lm=data.lm[!cell.name %in% c(cells.sprr1b,cells.foxn4)]
+data.lm=data.lm[!gene %in% genes.cc]
+
+pca.d1 <- dimplots.pca.wExptCols(data.lm,cordir,suffix='',max.genes = 30,ncp=10,min.cells.detect=2,cexCol = 1.2,genes.sig = 30,cex.sig = 0.4,plot.gene.cor=F)
+plot.ggpairs.wExptCols(data.lm,dir=cordir,suffix='',num.pcs = 10,height=27,width=27,sigType = 'Sig')
+for(i in 1:10){
+  make.facet.biplots(data.lm,c(paste0('PC',i),paste0('PC',i)),cordir,size=2.5,ax.suf = c('.pos','.neg'),height=16,width=20)
+}
+```
+
+```{r}
+# TP228 only -----
+rm(list=ls()[ls() %like% 'cells.'])
+cordir=file.path(REPORT_DIR,'tp228_r1/')
+system(paste0('mkdir ',cordir));system(paste0('mkdir ',cordir,'/biplots'));
+system(paste0('touch ',cordir));
+data.pca=data.all[experiment=='TP228'] 
+setkey(data.pca)
+cell.info=unique(data.pca[,.(cell.name,experiment,experiment_color,num.genes)]); setkey(cell.info)
+
+# rescale log10.cpm values to [0,1]
+data.pca[,num.cells:=sum(log10.cpm>0),by='gene'];data.pca=data.pca[num.cells>1]
+data.pca[,log10.cpm.orig:=log10.cpm];data.pca[,log10.cpm:=log10.cpm/max(log10.cpm),by='gene']
+
+pca.d1 <- dimplots.pca.lowMem(data.pca,cell.info,cordir,suffix='',max.genes = 30,ncp=10,min.cells.detect=2,cexCol = 1.2,genes.sig = 30,cex.sig = 0.4,plot.gene.cor=F)
+plot.ggpairs.wExptCols(data.pca,dir=cordir,suffix='',num.pcs = 10,height=20,width=20,sigType = 'Sig',annot.expt = F,size=2)
+plot.ggpairs.wExptCols(data.pca,dir=cordir,suffix='',num.pcs = 10,height=20,width=20,sigType = 'PC',annot.expt = F,size=2)
+
+data.pca[,log10.cpm:=log10.cpm.orig]
+pca.d1 <- dimplots.pca.lowMem(data.pca,cell.info,cordir,suffix='unRescale',max.genes = 20,ncp=10,min.cells.detect=2,cexCol = 1.2,genes.sig = 30,cex.sig = 0.4,plot.gene.cor=F)
+plot.ggpairs.wExptCols(data.pca,dir=cordir,suffix='unRescale',num.pcs = 10,height=20,width=20,sigType = 'Sig',annot.expt = F,size=2.5)
+plot.ggpairs.wExptCols(data.pca,dir=cordir,suffix='unRescale',num.pcs = 10,height=20,width=20,sigType = 'PC',annot.expt = F,size=2.5)
+
+foreach(i=1:10) %dopar% {
+  make.facet.biplots(data.pca,c(paste0('PC',i),paste0('PC',i)),cordir,size=3,ax.suf = c('.pos','.neg'),height = 18,width = 22,suffix = '')  
+}
+
+# rescaled performs a bit better - less affected by technical variability (ribosomal genes, outlier cells)
+# separate by PC1 cell cycle 
+pc.scores <- fread(paste0(cordir,'PC_allscores.csv')); setkey(pc.scores)
+cast.plot=dcast.data.table(data.pca,cell.name+experiment+num.genes~gene,value.var = 'log10.cpm')
+setkey(cast.plot)
+cast.plot=merge(cast.plot,pc.scores,by='cell.name')
+
+dims.plt=c('PC1.pos','PC1.neg');col='MKI67'
+ggplot(cast.plot,aes_string(dims.plt[1],dims.plt[2],color=col))+geom_point(size=3)+theme_classic()+
+  geom_vline(xintercept = .35)
+ggsave(paste0(cordir,'biplots/',dims.plt[1],'_',dims.plt[2],'_',col,'.pdf'),height = 3.5,width = 4.5)
+
+#
+
+cells.tp228.mki67 = pc.scores[PC1.pos > .35,cell.name]
+save(cells.tp228.mki67,file = file.path(REPORT_DIR,'tp228_r1/cells_MKI67.Rdata'))
+
+```
+
+
+```{r}
+# TP228 r2 -----
+rm(list=ls()[ls() %like% 'cells.'])
+cordir=file.path(REPORT_DIR,'tp228_r2/')
+system(paste0('mkdir ',cordir));system(paste0('mkdir ',cordir,'/biplots'));
+system(paste0('touch ',cordir));
+data.pca=data.all[experiment=='TP228'] 
+setkey(data.pca)
+load(file.path(REPORT_DIR,'tp228_r1/cells_MKI67.Rdata'))
+data.pca=data.pca[!cell.name %in% cells.tp228.mki67];setkey(data.pca)
+cell.info=unique(data.pca[,.(cell.name,experiment,experiment_color,num.genes)]); setkey(cell.info)
+
+# rescale log10.cpm values to [0,1]
+data.pca[,num.cells:=sum(log10.cpm>0),by='gene'];data.pca=data.pca[num.cells>1]
+data.pca[,log10.cpm.orig:=log10.cpm];data.pca[,log10.cpm:=log10.cpm/max(log10.cpm),by='gene']
+
+pca.d1 <- dimplots.pca.lowMem(data.pca,cell.info,cordir,suffix='',max.genes = 30,ncp=10,min.cells.detect=2,cexCol = 1.2,genes.sig = 30,cex.sig = 0.4,plot.gene.cor=F)
+plot.ggpairs.wExptCols(data.pca,dir=cordir,suffix='',num.pcs = 10,height=20,width=20,sigType = 'Sig',annot.expt = F,size=2)
+plot.ggpairs.wExptCols(data.pca,dir=cordir,suffix='',num.pcs = 10,height=20,width=20,sigType = 'PC',annot.expt = F,size=2)
+
+data.pca[,log10.cpm:=log10.cpm.orig]
+pca.d1 <- dimplots.pca.lowMem(data.pca,cell.info,cordir,suffix='unRescale',max.genes = 20,ncp=10,min.cells.detect=2,cexCol = 1.2,genes.sig = 30,cex.sig = 0.4,plot.gene.cor=F)
+plot.ggpairs.wExptCols(data.pca,dir=cordir,suffix='unRescale',num.pcs = 10,height=20,width=20,sigType = 'Sig',annot.expt = F,size=2.5)
+plot.ggpairs.wExptCols(data.pca,dir=cordir,suffix='unRescale',num.pcs = 10,height=20,width=20,sigType = 'PC',annot.expt = F,size=2.5)
+
+foreach(i=1:10) %dopar% {
+  make.facet.biplots(data.pca,c(paste0('PC',i),paste0('PC',i)),cordir,size=3,ax.suf = c('.pos','.neg'),height = 18,width = 22,suffix = '')  
+}
+
+# rescaled performs a bit better - less affected by technical variability (ribosomal genes, outlier cells)
+# separate by PC1 cell cycle 
+pc.scores <- fread(paste0(cordir,'PC_allscores.csv')); setkey(pc.scores)
+cast.plot=dcast.data.table(data.pca,cell.name+experiment+num.genes~gene,value.var = 'log10.cpm')
+setkey(cast.plot)
+cast.plot=merge(cast.plot,pc.scores,by='cell.name')
+
+dims.plt=c('PC1.pos','PC1.neg');col='MKI67'
+ggplot(cast.plot,aes_string(dims.plt[1],dims.plt[2],color=col))+geom_point(size=3)+theme_classic()+
+  geom_vline(xintercept = .35)
+ggsave(paste0(cordir,'biplots/',dims.plt[1],'_',dims.plt[2],'_',col,'.pdf'),height = 3.5,width = 4.5)
+
+#
+
+# cells.tp228.mki67 = pc.scores[PC1.pos > .35,cell.name]
+# save(cells.tp228.mki67,file = 'tp228_r1/cells_MKI67.Rdata')
+```
+
+
+
+
+```{r}
+
+# TP228 MKI67 -----
+rm(list=ls()[ls() %like% 'cells.'])
+cordir=file.path(REPORT_DIR,'tp228_MKI67/')
+system(paste0('mkdir ',cordir));system(paste0('mkdir ',cordir,'/biplots'));
+system(paste0('touch ',cordir));
+data.pca=data.all[experiment=='TP228'] 
+setkey(data.pca)
+load(file.path(REPORT_DIR,'tp228_r1/cells_MKI67.Rdata'))
+data.pca=data.pca[cell.name %in% cells.tp228.mki67];setkey(data.pca)
+cell.info=unique(data.pca[,.(cell.name,experiment,experiment_color,num.genes)]); setkey(cell.info)
+
+# rescale log10.cpm values to [0,1]
+data.pca[,num.cells:=sum(log10.cpm>0),by='gene'];data.pca=data.pca[num.cells>1]
+data.pca[,log10.cpm.orig:=log10.cpm];data.pca[,log10.cpm:=log10.cpm/max(log10.cpm),by='gene']
+
+pca.d1 <- dimplots.pca.lowMem(data.pca,cell.info,cordir,suffix='',max.genes = 30,ncp=10,min.cells.detect=2,cexCol = 1.2,genes.sig = 30,cex.sig = 0.4,plot.gene.cor=F)
+plot.ggpairs.wExptCols(data.pca,dir=cordir,suffix='',num.pcs = 10,height=20,width=20,sigType = 'Sig',annot.expt = F,size=2)
+plot.ggpairs.wExptCols(data.pca,dir=cordir,suffix='',num.pcs = 10,height=20,width=20,sigType = 'PC',annot.expt = F,size=2)
+
+data.pca[,log10.cpm:=log10.cpm.orig]
+pca.d1 <- dimplots.pca.lowMem(data.pca,cell.info,cordir,suffix='unRescale',max.genes = 20,ncp=10,min.cells.detect=2,cexCol = 1.2,genes.sig = 30,cex.sig = 0.4,plot.gene.cor=F)
+plot.ggpairs.wExptCols(data.pca,dir=cordir,suffix='unRescale',num.pcs = 10,height=20,width=20,sigType = 'Sig',annot.expt = F,size=2.5)
+plot.ggpairs.wExptCols(data.pca,dir=cordir,suffix='unRescale',num.pcs = 10,height=20,width=20,sigType = 'PC',annot.expt = F,size=2.5)
+
+foreach(i=1:10) %dopar% {
+  make.facet.biplots(data.pca,c(paste0('PC',i),paste0('PC',i)),cordir,size=3,ax.suf = c('.pos','.neg'),height = 18,width = 22,suffix = '')  
+}
+
+# remove PC1 and 10 outliers
+pc.scores <- fread(paste0(cordir,'PC_allscores.csv')); setkey(pc.scores)
+
+cells.tp228.mki67.r1Outliers = c(pc.scores[PC1.neg > .6,cell.name],pc.scores[PC10.neg > .7,cell.name])
+save(cells.tp228.mki67.r1Outliers,file = file.path(REPORT_DIR,'tp228_MKI67/cells_PC1-10Outliers.Rdata'))
+
+```
+
+
+```{r}
+# TP228 MKI67 r2 -----
+rm(list=ls()[ls() %like% 'cells.'])
+cordir=file.path(REPORT_DIR,'tp228_MKI67_r2/')
+system(paste0('mkdir ',cordir));system(paste0('mkdir ',cordir,'/biplots'));
+system(paste0('touch ',cordir));
+data.pca=data.all[experiment=='TP228'] 
+setkey(data.pca)
+load(file.path(REPORT_DIR,'tp228_r1/cells_MKI67.Rdata'))
+data.pca=data.pca[cell.name %in% cells.tp228.mki67];setkey(data.pca)
+load(file.path(REPORT_DIR,'tp228_MKI67/cells_PC1-10Outliers.Rdata'))
+data.pca=data.pca[!cell.name %in% cells.tp228.mki67.r1Outliers]
+cell.info=unique(data.pca[,.(cell.name,experiment,experiment_color,num.genes)]); setkey(cell.info)
+
+# rescale log10.cpm values to [0,1]
+data.pca[,num.cells:=sum(log10.cpm>0),by='gene'];data.pca=data.pca[num.cells>1]
+data.pca[,log10.cpm.orig:=log10.cpm];data.pca[,log10.cpm:=log10.cpm/max(log10.cpm),by='gene']
+
+pca.d1 <- dimplots.pca.lowMem(data.pca,cell.info,cordir,suffix='',max.genes = 30,ncp=10,min.cells.detect=2,cexCol = 1.2,genes.sig = 30,cex.sig = 0.4,plot.gene.cor=F)
+plot.ggpairs.wExptCols(data.pca,dir=cordir,suffix='',num.pcs = 10,height=20,width=20,sigType = 'Sig',annot.expt = F,size=2)
+plot.ggpairs.wExptCols(data.pca,dir=cordir,suffix='',num.pcs = 10,height=20,width=20,sigType = 'PC',annot.expt = F,size=2)
+
+data.pca[,log10.cpm:=log10.cpm.orig]
+pca.d1 <- dimplots.pca.lowMem(data.pca,cell.info,cordir,suffix='unRescale',max.genes = 20,ncp=10,min.cells.detect=2,cexCol = 1.2,genes.sig = 30,cex.sig = 0.4,plot.gene.cor=F)
+plot.ggpairs.wExptCols(data.pca,dir=cordir,suffix='unRescale',num.pcs = 10,height=20,width=20,sigType = 'Sig',annot.expt = F,size=2.5)
+plot.ggpairs.wExptCols(data.pca,dir=cordir,suffix='unRescale',num.pcs = 10,height=20,width=20,sigType = 'PC',annot.expt = F,size=2.5)
+
+foreach(i=1:10) %dopar% {
+  make.facet.biplots(data.pca,c(paste0('PC',i),paste0('PC',i)),cordir,size=3,ax.suf = c('.pos','.neg'),height = 18,width = 22,suffix = '')  
+}
+
+# remove PC1 and 10 outliers
+pc.scores <- fread(paste0(cordir,'PC_allscores.csv')); setkey(pc.scores)
+
+cells.tp228.mki67.r1Outliers = c(pc.scores[PC1.neg > .6,cell.name],pc.scores[PC10.neg > .7,cell.name])
+save(cells.tp228.mki67.r1Outliers,file = 'tp228_MKI67/cells_PC1-10Outliers.Rdata')
+
+
+```
+
+
