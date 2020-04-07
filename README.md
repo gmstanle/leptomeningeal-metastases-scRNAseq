@@ -22,7 +22,7 @@ install.packages(c('Seurat','dplyr','data.table','ggplot2','reshape2','RColorBre
 Then run the script to normalize and qc the raw data:
 
 ```
-Rscript src/make_raw_data.R`
+Rscript src/make_raw_data.R
 ```
 
 Make sure you run this from the root directory of the project. 
