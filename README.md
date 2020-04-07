@@ -1,5 +1,5 @@
 To run this analysis, download the [gene count data](https://figshare.com/articles/Raw_gene_counts/12089430) and the
-Ensembl ID - Gene name [translation table](https://figshare.com/account/home#/projects/78399).
+Ensembl ID - Gene name [translation table](https://figshare.com/account/projects/78399/articles/12090480).
 
 In the root directory of the project, create the `data/` folder and move the data to the `data/` folder:
 ```
