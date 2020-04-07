@@ -3,6 +3,7 @@ Ensembl ID - Gene name [translation table](https://figshare.com/account/projects
 
 In the root directory of the project, create the `data/` folder and move the data to the `data/` folder:
 ```
+cd leptomeningeal-metastases-scRNAseq
 mkdir data
 mv <path/to/genecounts> data/lepto_met.gene_counts.df
 ```
@@ -19,12 +20,17 @@ install.packages(c('Seurat','dplyr','data.table','ggplot2','reshape2','RColorBre
 		   'foreach','doMC','Matrix','ggrepel','cowplot','Rmisc'))
 ```
 
-Then run the script to normalize and qc the raw data:
+Then run the `make_raw_data.R` script in the project root directory to normalize and qc the raw data:
 
 ```
 Rscript src/make_raw_data.R
 ```
 
-Make sure you run this from the root directory of the project. 
+You should now have 3 files total in the root directory:
+```
+├── lepto_met.cell.info.RData
+├── lepto_met.data.RData
+└── lepto_met.gene_counts.df
+```
 
 The analyses can then be run from the `notebooks/` folder. 
